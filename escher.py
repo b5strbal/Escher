@@ -25,27 +25,37 @@ MATHEMATICAL BACKGROUND:
     triangle must be a quotient of 360 degrees by an positive integer,
     otherwise the triangles overlap when flipping them around a vertex.
     Since the sum of the three angles is 180 degrees, we have the equation
-    360/p + 360/q + 360/r = 180 where p, q, r are positive integers, at least
-    3. I.e. 1/p + 1/q + 1/r = 1/2. One can easily check that only the triples
-    (3, 6, 6), (4, 6, 12) and (6, 6, 6) work as (p, q, r).
+    360/a + 360/b + 360/c = 180 where a, b, c are positive integers, at least
+    3. I.e. 1/a + 1/b + 1/c = 1/2. One can easily check that only the triples
+    (3, 6, 6), (4, 6, 12) and (6, 6, 6) work as (a, b, c).
 
     On the hyperbolic plane however, the required condition is
-    1/p + 1/q + 1/r < 1/2, and here there are infinitely many possibilities,
+    1/a + 1/b + 1/c < 1/2, and here there are infinitely many possibilities,
     which explains why the tessallations of the hyperbolic plane are much 
-    richer than that of the Euclidean plane.
+    richer than that of the Euclidean plane. 
+
+    If all of a, b, c are even, then the tilings have the nice property that 
+    the any side of any triangle in the tessallation is a subset of a line
+    that run along the boundaries of triangles. If any of a, b, c is odd,
+    then some of these lines cut into the interior of other triangles which
+    makes the situation more complicated. Therefore we restrict ourselves
+    to the case when (a, b, c) = (2p, 2q, 2r) for some integers p, q, r.
+    In the hyperbolic plane, 1/p + 1/q + 1/r < 1 should hold.
 
 WHAT THE PROGRAM DOES:
 
     Creates a tiling of the Poincare disk using any triangle shape that 
-    satisfies 1/p + 1/q + 1/r < 1/2. The inside of each hyperbolic triangle
+    satisfies 1/p + 1/q + 1/r < 1. The inside of each hyperbolic triangle
     is filled with an image. This image should be specified by the name
     of an image file and the coordinates of the three vertices of the
     triangular region that is then pasted into the hyperbolic triangle.
-    One can use multiple images and then the images inside the 
-    hyperbolic triangles will alternate. (E.g. one image with Tom,
+    One can actually use multiple images. If one uses two images, they
+    will fill the triangles alternatingly. (E.g. one image with Tom,
     another with Jerry, and the infinitely Toms will chase infinitely many
-    Jerrys in the Poincare disk.) The only requirement here is that the
-    number of different images used must divide p, q, r.
+    Jerrys in the Poincare disk.)If more image, however such
+    guarantees are impossible to pose, so the outcome will look a little
+    random. Not even that is guaranteed that no two neighboring triangle
+    will be filled using the same image.
 
     When specifying the image file and the triangle, the vertices of the 
     triangle are allowed to be outside of the image, and in this case any
@@ -66,14 +76,23 @@ REQUIREMENTS:
 
 EXAMPLE USE:
 
-    Have a stinkbug.png file in your current directory. Open your favorite
+    Have a stinkbug.png image of size 800x600 in your current directory. 
+    Open your favorite
     Python or Sage interpreter (python, ipython, pypy, sage, etc. in a 
     UNIX terminal), then type:
 
-        >>> from escher import TriangleImage, create_image
-        >>> triangle_image = TriangleImage("stinkbug.png", ((0,800), (0, 0), (800, 0)))
+        >>> from escher import TriangleImage, create_image # doctest: +SKIP
+        >>> triangle_image = TriangleImage("stinkbug.png", ((0,599), (0, 0), (799, 0)))
         >>> triangle_image2 = TriangleImage(default_color = (50, 223, 146))
-        >>> create_image("output.png", 500, 6, 6, 8, [triangle_image, triangle_image2]) # doctest: +SKIP
+        >>> create_image("output.png", 500, 3, 3, 4, [triangle_image, triangle_image2]) # doctest: +SKIP
+
+    It is possible to use a rectangular image for the tessallation. Simply
+    create two TriangleImage objects from the same image, one from the 
+    upper left, another from the lower right triangle:
+
+        >>> triangle_image = TriangleImage("stinkbug.png", ((0,599), (0, 0), (799, 0)))
+        >>> triangle_image2 = TriangleImage("stinkbug.png", ((0,599), (799, 599), (799, 0)))
+        >>> create_image("output.png", 500, 3, 3, 4, [triangle_image, triangle_image2]) # doctest: +SKIP
 
     To get more help about how to define TriangleImage objects and how to
     use the create_image function, type:
@@ -370,9 +389,9 @@ def _linear_combination(weights, vertices):
     return tuple(_iround(sum(weights[i] * vertices[i][j] for i in range(3))) 
             for j in range(2))
 
-def _complex_to_pixels(z, halfsize):
+def _complex_to_array_coor(z, halfsize):
     """
-    Converts a complex number to pixel coordinates.
+    Converts a complex number to array coordinates.
 
     INPUT:
 
@@ -387,17 +406,17 @@ def _complex_to_pixels(z, halfsize):
 
     EXAMPLES:
 
-        >>> _complex_to_pixels(0, 500)
+        >>> _complex_to_array_coor(0, 500)
         (500, 500)
-        >>> _complex_to_pixels(complex(-0.5, -0.5), 500)
-        (250, 750)
+        >>> _complex_to_array_coor(complex(-0.5, -0.5), 500)
+        (750, 250)
 
     """
-    return (_iround(halfsize * (1.0 + z.real)),_iround(halfsize * (1.0 - z.imag)))
+    return (_iround(halfsize * (1.0 - z.imag)),_iround(halfsize * (1.0 + z.real)))
 
-def _pixels_to_complex(pixel, halfsize):
+def _array_coord_to_complex(pixel, halfsize):
     """
-    Converts pixel coordinates to a complex number.
+    Converts array coordinates to a complex number.
 
     INPUT:
 
@@ -412,13 +431,13 @@ def _pixels_to_complex(pixel, halfsize):
 
     EXAMPLES:
 
-        >>> _pixels_to_complex((0, 0), 500)
+        >>> _array_coord_to_complex((0, 0), 500)
         (-1+1j)
-        >>> _pixels_to_complex((750, 250), 500)
-        (0.5+0.5j)
+        >>> _array_coord_to_complex((750, 250), 500)
+        (-0.5-0.5j)
 
     """
-    return complex(pixel[0]/halfsize - 1.0, 1.0 - pixel[1]/halfsize)
+    return complex(pixel[1]/halfsize - 1.0, 1.0 - pixel[0]/halfsize)
     
 
 class TriangleImage(object):
@@ -464,7 +483,7 @@ class TriangleImage(object):
             self.array = PIL.Image.new('RGB', (1, 1), default_color).load()
             self.vertices = ((0,0),(0,0),(0,0))
         else:
-            self.vertices = vertices
+            self.vertices = tuple(tuple(x[::-1]) for x in vertices)
             #self.array = spmisc.imread(image_file).tolist()
             self.array = PIL.Image.open(image_file).convert('RGB').load()
 
@@ -512,9 +531,6 @@ def create_image(output_file_name, size, p, q, r, triangle_images):
 
     """
     n = len(triangle_images)
-    if not all((x % n) == 0 for x in {p, q, r}):
-        raise ValueError("The number of triangles around each vertex "
-                "must be divisible by the number of image sources. ")
     vertices = _get_triangle(p, q, r)
     new_image = [[[0]*3 for i in range(size)] for j in range(size)]
     temp_images = [[[[-1]*3 for i in range(size)] for j in range(size)] for x in triangle_images]
@@ -525,10 +541,10 @@ def create_image(output_file_name, size, p, q, r, triangle_images):
 
     for i in range(size):
         for j in range(size):
-            z = _pixels_to_complex((i, j), halfsize)
+            z = _array_coord_to_complex((i, j), halfsize)
             
-            if abs(z) >= 1:
-                new_image[i][j] = (255, 255, 255)
+            if abs(z) > 1 - _epsilon:
+                new_image[i][j] = (0, 0, 0)
                 continue
 
             do_more = True
@@ -541,12 +557,8 @@ def create_image(output_file_name, size, p, q, r, triangle_images):
                         do_more = True
                         z = newz
                         count += 1
-#                        if k == 0: # !!!!!!!!! This needs correction!!!!!!!!!!
-#                            count = n - 1 - count
-#                        else:
-#                            count = (n + 1 - count) % n
             
-            (newi, newj) = _complex_to_pixels(z, halfsize)
+            (newi, newj) = _complex_to_array_coor(z, halfsize)
             current_temp_image = temp_images[count % n]
             current_triangle_image = triangle_images[count % n]
             if current_temp_image[newi][newj][0] < 0: #pixel is uninitialized
@@ -614,7 +626,7 @@ def _point_from_origin(cosh_of_dist):
 def _get_triangle(p, q, r):
     """
     Calculates the vertices of a hyperbolic triangle with angles
-    2*pi/p, 2*pi/q, 2*pi/r.
+    pi/p, pi/q, pi/r.
 
     One of the vertices is the origin, another is on the positive
     real axis, and the third has positive imaginary part.
@@ -622,7 +634,7 @@ def _get_triangle(p, q, r):
     INPUT:
 
     - ``p``, ``q``, ``r`` - positive integers such that 
-        1/p + 1/q + 1/r < 1/2. 
+        1/p + 1/q + 1/r < 1. 
 
     OUTPUT:
 
@@ -633,19 +645,19 @@ def _get_triangle(p, q, r):
     All the angles of the following triangle are 45 degrees so the
     third vertex is on the line y=x.
 
-        >>> t = _get_triangle(8, 8, 8)
+        >>> t = _get_triangle(4, 4, 4)
         >>> t[0]
         0.0
         >>> (round(t[2].real, 10), round(t[2].imag, 10))
         (0.4550898606, 0.4550898606)
 
     """
-    if 1.0/p + 1.0/q + 1.0/r >= 0.5 - _epsilon:
+    if 1.0/p + 1.0/q + 1.0/r >= 1 - _epsilon:
         raise ValueError("The sum of angles in a hyperbolic triangle is less"
-                " than pi, so 1/p + 1/q + 1/r < 1/2 should be satisfied.")
-    alpha = 2*pi/p
-    beta = 2*pi/q
-    gamma = 2*pi/r
+                " than pi, so 1/p + 1/q + 1/r < 1 should be satisfied.")
+    alpha = pi/p
+    beta = pi/q
+    gamma = pi/r
 
     return (0.0, _point_from_origin(_cosh_side_length(alpha, beta, gamma)),
             _point_from_origin(_cosh_side_length(alpha, gamma, beta)) *
@@ -656,9 +668,4 @@ def _get_triangle(p, q, r):
 if __name__ == "__main__":
     import doctest
     doctest.testmod()
-    
-#t1 = TriangleImage(default_color = (255, 0, 0))
-#t2 = TriangleImage(default_color = (0, 255, 0))
-#t3 = TriangleImage(default_color = (0, 0, 255))
-#create_image("colorful.png", 100, 6, 9, 12, [t1, t2, t3])
 
