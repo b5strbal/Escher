@@ -69,7 +69,6 @@ WHAT THE PROGRAM DOES:
 
 REQUIREMENTS:
 
-    - Python 2.7 or higher
     - Python Image Library (PIL): since it is not maintained anymore,
         check out its fork "pillow". (If you have Sage, you already have
         PIL installed.)
@@ -81,18 +80,23 @@ EXAMPLE USE:
     Python or Sage interpreter (python, ipython, pypy, sage, etc. in a 
     UNIX terminal), then type:
 
-        >>> from escher import TriangleImage, create_image # doctest: +SKIP
-        >>> triangle_image = TriangleImage("stinkbug.png", ((0,599), (0, 0), (799, 0)))
-        >>> triangle_image2 = TriangleImage(default_color = (50, 223, 146))
-        >>> create_image("output.png", 500, 3, 3, 4, [triangle_image, triangle_image2]) # doctest: +SKIP
+        >>> import escher 
+        >>> triangle_image = escher.TriangleImage("stinkbug.png", ((0,599), (0, 0), (799, 0)))
+        >>> triangle_image2 = escher.TriangleImage(default_color = (50, 223, 146))
+        >>> escher.create_image([triangle_image, triangle_image2], 3, 3, 4, 500, "output.png") # doctest: +SKIP
 
     It is possible to use a rectangular image for the tessallation. Simply
     create two TriangleImage objects from the same image, one from the 
     upper left, another from the lower right triangle:
 
-        >>> triangle_image = TriangleImage("stinkbug.png", ((0,599), (0, 0), (799, 0)))
-        >>> triangle_image2 = TriangleImage("stinkbug.png", ((0,599), (799, 599), (799, 0)))
-        >>> create_image("output.png", 500, 3, 3, 4, [triangle_image, triangle_image2]) # doctest: +SKIP
+        >>> escher.create_image_from_rectangle("stinkbug.png", 5, 5, 5, 500, "output.png") # doctest: +SKIP
+
+    The above command is a shorthand for the following three together which use the
+    upper left and bottom right triangles for the image to simulate a rectange:
+
+        >>> triangle_image = escher.TriangleImage("stinkbug.png", ((0,599), (0, 0), (799, 0)))
+        >>> triangle_image2 = escher.TriangleImage("stinkbug.png", ((0,599), (799, 599), (799, 0)))
+        >>> escher.create_image([triangle_image, triangle_image2], 3, 3, 4, 500, "output.png") # doctest: +SKIP
 
     To get more help about how to define TriangleImage objects and how to
     use the create_image function, type:
@@ -456,8 +460,10 @@ class TriangleImage(object):
         filled with this TriangleImage will be simply colored to 
         ``default_color``.
 
-    - ``vertices`` - a list of three tuples of two integers, the
-        pixel-coordinates of the triangle. Normally one chooses the 
+    - ``vertices`` - a list of three tuples of two integers (the
+        pixel-coordinates of the triangle) or a special string see below). 
+
+        Normally one chooses the 
         coordinates to be valid coordinates for the size of the image,
         but out-of-bounds coordinates are accepted, too. For instance,
         given an image file of size 800x600, the coordinates (0,0),
@@ -466,6 +472,12 @@ class TriangleImage(object):
         triangle that is out-of-bounds is considered to be have color
         ``default_color``.
 
+        Special strings: ``upperleft`` and ``bottomright``. When one of
+        these is specified instead of vertices, then the vertice are 
+        automatically generated to clip the upper left and bottom right
+        triangles of the image.
+        
+
     - ``default_color`` - a tuple of three integers between 0 and 255 as
         the RBG coding of the color. It is white, (255, 255, 255), by
         default.
@@ -473,6 +485,7 @@ class TriangleImage(object):
     EXAMPLES:
         
         >>> t1 = TriangleImage("stinkbug.png", [(0,0), (800, 0), (400, 700)])
+        >>> t1 = TriangleImage("stinkbug.png", "upperleft")
         >>> t2 = TriangleImage(default_color = (59, 123, 53))
 
     """
@@ -483,97 +496,23 @@ class TriangleImage(object):
             self.array = PIL.Image.new('RGB', (1, 1), default_color).load()
             self.vertices = ((0,0),(0,0),(0,0))
         else:
-            self.vertices = tuple(tuple(x[::-1]) for x in vertices)
+            im = PIL.Image.open(image_file).convert('RGB')
+            self.array = im.load()
+            (width, height) = im.size
+            topleft = (0, 0)
+            topright = (width - 1, 0)
+            bottomleft = (0, height - 1)
+            bottomright = (width - 1, height - 1)
+            if isinstance(vertices, str):
+                if vertices == 'upperleft':
+                    self.vertices = (topleft, bottomleft, topright)
+                elif vertices == 'bottomright':
+                    self.vertices = (bottomright, bottomleft, topright)
+                else:
+                    raise ValueError("Invalid input for ``vertices``.")
+            else:
+                self.vertices = tuple(tuple(x[::-1]) for x in vertices)
             #self.array = spmisc.imread(image_file).tolist()
-            self.array = PIL.Image.open(image_file).convert('RGB').load()
-
-
-def create_image(output_file_name, size, p, q, r, triangle_images):
-    """
-    Writes a new image file with a tiling of the Poincare disk.
-
-    INPUT:
-
-    - ``output_file_name`` - string, the name of the output image file. 
-        It should be specified with an extension (e.g. "o.jpg", "o.png").
-        The allowed formats depend on what libraries are installed with
-        PIL.
-
-    - ``size`` - positive integer. The dimensions of the output file are
-        ``size``x``size``. On a 2009 Macbook Pro, a 1000x1000 image takes 
-        about 60 seconds to generate with the default CPython interpreter, 
-        a little faster (45 seconds) with Cython on PyPy.
-
-    - ``p``,``q``,``r`` - positive integers such that 
-        1/p + 1/q + 1/r < 1/2. They determine how many triangles surround
-        the different vertices of each triangle.
-
-    - ``triangle_images`` - list of TriangleImage objects. Any number of
-        TriangleImages may be specified as long as their number divides
-        all of p, q, r. (This ensures that the triangles appear
-        alternately around each vertex.)
-
-    EXAMPLES:
-
-    Creating a tiling using one image:
-
-        >>> t = TriangleImage("KillerRabbit.jpg", \
-                [(0,0), (800,0), (0,800)]) # doctest: +SKIP
-        >>> create_image("rabbit_circle.jpg", 1000, 4, 8, 10, [t]) # doctest: +SKIP
-
-    Creating a tiling without a source image, where the triangles alternate
-    between red, green, blue:
-
-        >>> t1 = TriangleImage(default_color = (255, 0, 0))
-        >>> t2 = TriangleImage(default_color = (0, 255, 0))
-        >>> t3 = TriangleImage(default_color = (0, 0, 255))
-        >>> create_image("colorful.png", 1000, 6, 9, 12, [t1, t2, t3]) # doctest: +SKIP
-
-    """
-    n = len(triangle_images)
-    vertices = _get_triangle(p, q, r)
-    new_image = [[[0]*3 for i in range(size)] for j in range(size)]
-    temp_images = [[[[-1]*3 for i in range(size)] for j in range(size)] for x in triangle_images]
-    halfplanes = [_MarkedHalfPlane(vertices[i], vertices[(i+1)%3], vertices[(i+2)%3])
-            for i in range(3)]
-    
-    halfsize = size/2.0
-
-    for i in range(size):
-        for j in range(size):
-            z = _array_coord_to_complex((i, j), halfsize)
-            
-            if abs(z) > 1 - _epsilon:
-                new_image[i][j] = (0, 0, 0)
-                continue
-
-            do_more = True
-            count = 0
-            while do_more:
-                do_more = False
-                for k in range(3):
-                    newz = halfplanes[k].reflect_in(z)
-                    if newz != z:
-                        do_more = True
-                        z = newz
-                        count += 1
-            
-            (newi, newj) = _complex_to_array_coor(z, halfsize)
-            current_temp_image = temp_images[count % n]
-            current_triangle_image = triangle_images[count % n]
-            if current_temp_image[newi][newj][0] < 0: #pixel is uninitialized
-                weights = _get_coordinates(halfplanes, z)
-                (x, y) = _linear_combination(weights, triangle_images[count % n].vertices)
-                try:
-                    current_temp_image[newi][newj] = current_triangle_image.array[x,y]
-                except IndexError: #if the coordinates are out of range
-                    current_temp_image[newi][newj] = current_triangle_image.default_color
-            new_image[i][j] = current_temp_image[newi][newj]
-
-    #spmisc.imsave(output_file_name, new_image)
-    new_img = PIL.Image.new("RGB", (size, size))
-    new_img.putdata([x for row in new_image for x in row])
-    new_img.save(output_file_name)
 
 def _cosh_side_length(alpha, beta, gamma):
     """
@@ -662,6 +601,133 @@ def _get_triangle(p, q, r):
     return (0.0, _point_from_origin(_cosh_side_length(alpha, beta, gamma)),
             _point_from_origin(_cosh_side_length(alpha, gamma, beta)) *
             complex(cos(alpha), sin(alpha)))
+
+def create_image(triangle_images, p, q, r, size, output_file_name):
+    """
+    Writes a new image file with a tiling of the Poincare disk.
+
+    INPUT:
+
+    - ``triangle_images`` - list of TriangleImage objects. Any number of
+        TriangleImages may be specified as long as their number divides
+        all of p, q, r. (This ensures that the triangles appear
+        alternately around each vertex.)
+
+    - ``p``,``q``,``r`` - positive integers such that 
+        1/p + 1/q + 1/r < 1/2. They determine how many triangles surround
+        the different vertices of each triangle.
+
+    - ``size`` - positive integer. The dimensions of the output file are
+        ``size``x``size``. On a 2009 Macbook Pro, a 1000x1000 image takes 
+        about 60 seconds to generate with the default CPython interpreter, 
+        a little faster (45 seconds) with Cython on PyPy.
+
+    - ``output_file_name`` - string, the name of the output image file. 
+        It should be specified with an extension (e.g. "o.jpg", "o.png").
+        The allowed formats depend on what libraries are installed with
+        PIL.
+
+
+    EXAMPLES:
+
+    Creating a tiling using one image:
+
+        >>> t = TriangleImage("KillerRabbit.jpg", \
+                [(0,0), (800,0), (0,800)]) # doctest: +SKIP
+        >>> create_image([t], 4, 8, 10, 1000, "rabbit_circle.jpg") # doctest: +SKIP
+
+    Creating a tiling without a source image, where the triangles alternate
+    between red, green, blue:
+
+        >>> t1 = TriangleImage(default_color = (255, 0, 0))
+        >>> t2 = TriangleImage(default_color = (0, 255, 0))
+        >>> t3 = TriangleImage(default_color = (0, 0, 255))
+        >>> create_image([t1, t2, t3], 6, 9, 12, 1000, "colorful.png") # doctest: +SKIP
+
+    """
+    n = len(triangle_images)
+    vertices = _get_triangle(p, q, r)
+    new_image = [[[0]*3 for i in range(size)] for j in range(size)]
+    temp_images = [[[[-1]*3 for i in range(size)] for j in range(size)] for x in triangle_images]
+    halfplanes = [_MarkedHalfPlane(vertices[i], vertices[(i+1)%3], vertices[(i+2)%3])
+            for i in range(3)]
+    
+    halfsize = size/2.0
+
+    for i in range(size):
+        for j in range(size):
+            z = _array_coord_to_complex((i, j), halfsize)
+            
+            if abs(z) > 1 - _epsilon:
+                new_image[i][j] = (0, 0, 0)
+                continue
+
+            do_more = True
+            count = 0
+            while do_more:
+                do_more = False
+                for k in range(3):
+                    newz = halfplanes[k].reflect_in(z)
+                    if newz != z:
+                        do_more = True
+                        z = newz
+                        count += 1
+            
+            (newi, newj) = _complex_to_array_coor(z, halfsize)
+            current_temp_image = temp_images[count % n]
+            current_triangle_image = triangle_images[count % n]
+            if current_temp_image[newi][newj][0] < 0: #pixel is uninitialized
+                weights = _get_coordinates(halfplanes, z)
+                (x, y) = _linear_combination(weights, triangle_images[count % n].vertices)
+                try:
+                    current_temp_image[newi][newj] = current_triangle_image.array[x,y]
+                except IndexError: #if the coordinates are out of range
+                    current_temp_image[newi][newj] = current_triangle_image.default_color
+            new_image[i][j] = current_temp_image[newi][newj]
+
+    #spmisc.imsave(output_file_name, new_image)
+    new_img = PIL.Image.new("RGB", (size, size))
+    new_img.putdata([x for row in new_image for x in row])
+    new_img.save(output_file_name)
+
+
+def create_image_from_rectangle(input_file_name, p, q, r, size, output_file_name):
+    """
+    Creates an tiling from a whole rectangular image file.
+
+    In the background it is still a tiling from triangles. There are two
+    triangles, the upper left and the lower right triangles of the image.
+    Using this function instead of create_image() has the advantage that
+    one doesn't have to worry about the vertices of the triangles.
+
+    INPUT:
+
+    - ``input_file_name`` - string, the name of the rectangular image used
+        for the tiling.
+
+    - ``p``,``q``,``r`` - positive integers such that 
+        1/p + 1/q + 1/r < 1/2. They determine how many triangles surround
+        the different vertices of each triangle.
+
+    - ``size`` - positive integer. The dimensions of the output file are
+        ``size``x``size``. On a 2009 Macbook Pro, a 1000x1000 image takes 
+        about 60 seconds to generate with the default CPython interpreter, 
+        a little faster (45 seconds) with Cython on PyPy.
+
+    - ``output_file_name`` - string, the name of the output image file. 
+        It should be specified with an extension (e.g. "o.jpg", "o.png").
+        The allowed formats depend on what libraries are installed with
+        PIL.
+
+    EXAMPLES:
+
+        >>> create_image_from_rectangle("stinkbug.png", 3, 3, 4, \
+                100, "output.png") # doctest: +SKIP
+
+    """
+    t1 = TriangleImage(input_file_name, 'upperleft')
+    t2 = TriangleImage(input_file_name, 'bottomright')
+    create_image([t1, t2], p, q, r, size, output_file_name)
 
 
 
